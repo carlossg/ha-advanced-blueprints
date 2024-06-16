@@ -331,6 +331,7 @@ class PvExcessControl:
                                     f'Assuming OFF state.')
                     defined_power = inst.defined_current * PvExcessControl.grid_voltage * inst.phases
 
+                    log.info(f'{log_prefix} csv: {inst.appliance_switch}, {inst.appliance_priority}, {defined_power}, {avg_excess_power}')
                     if avg_excess_power >= defined_power or (inst.appliance_priority > 1000 and avg_excess_power > 0):
                         log.debug(f'{log_prefix} Average Excess power is high enough to switch on appliance.')
                         if inst.switch_interval_counter >= inst.appliance_switch_interval:
@@ -419,7 +420,7 @@ class PvExcessControl:
                             power_consumption = self.switch_off(inst)
                             if power_consumption != 0:
                                 prev_consumption_sum += power_consumption
-                                log.debug(f'{log_prefix} Added {power_consumption=} W to prev_consumption_sum, '
+                                log.info(f'{log_prefix} Added {power_consumption=} W to prev_consumption_sum, '
                                           f'which is now {prev_consumption_sum} W.')
                     else:
                         log.debug(f'{log_prefix} Average Excess Power ({avg_excess_power} W) is still greater than minimum excess power '
@@ -566,7 +567,7 @@ class PvExcessControl:
         """
         automation_state = _get_state(a_id)
         if automation_state == 'off':
-            log.debug(f'Doing nothing, because automation is not activated: State is {automation_state}.')
+            log.info(f'Doing nothing, because automation is not activated: State is {automation_state}.')
             return False
         elif automation_state is None:
             log.info(f'Automation "{a_id}" was deleted. Removing related class instance.')
@@ -602,7 +603,7 @@ class PvExcessControl:
         remaining_capacity = capacity - (0.01 * capacity * _get_num_state(PvExcessControl.home_battery_level, return_on_error=0))
         remaining_forecast = _get_num_state(PvExcessControl.solar_production_forecast, return_on_error=0)
         if remaining_forecast <= remaining_capacity + kwh_offset:
-            log.debug(f'Force battery charge necessary: {capacity=} kWh|{remaining_capacity=} kWh|{remaining_forecast=} kWh| '
+            log.info(f'Force battery charge necessary: {capacity=} kWh|{remaining_capacity=} kWh|{remaining_forecast=} kWh| '
                       f'{kwh_offset=} kWh')
             # go through appliances lowest to highest priority, and try switching them off individually
             for a_id, e in dict(sorted(PvExcessControl.instances.items(), key=lambda item: item[1]['priority'])).items():
