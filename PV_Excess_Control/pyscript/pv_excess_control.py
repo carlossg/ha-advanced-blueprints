@@ -346,20 +346,23 @@ class PvExcessControl:
                         else:
                             log.debug(f'{log_prefix} Cannot switch on appliance, because appliance switch interval is not reached '
                                       f'({inst.switch_interval_counter}/{inst.appliance_switch_interval}).')
-                    elif (not switched_off_appliance_to_switch_on_higher_prioritized_one) and (self.calculate_pwr_reducible(inst.appliance_priority) + avg_excess_power) >= (defined_power if inst.appliance_priority <= 500 else 0):
-                        # excess power is sufficent by switching off lower prioritized appliance(s)
-                        if inst.switch_interval_counter >= inst.appliance_switch_interval:
-                            self.switch_on(inst)
-                            inst.switch_interval_counter = 0
-                            switched_off_appliance_to_switch_on_higher_prioritized_one = True
-                            log.info(f'{log_prefix} Average Excess power will be high enough by switching off lower prioritized appliance(s). Switched on appliance.')
-                            # "restart" history by subtracting defined power from each history value within the specified time frame
-                            self._adjust_pwr_history(inst, -defined_power)
-                            task.sleep(1)
-                            if inst.dynamic_current_appliance:
-                                _set_value(inst.appliance_current_set_entity, inst.min_current)
                     else:
-                        log.debug(f'{log_prefix} Average Excess power not high enough to switch on appliance.')
+                        pwr_reducible = self.calculate_pwr_reducible(inst.appliance_priority)
+                        if (not switched_off_appliance_to_switch_on_higher_prioritized_one) and (pwr_reducible + avg_excess_power) >= (defined_power if inst.appliance_priority <= 500 else 0):
+                            # excess power is sufficient by switching off lower prioritized appliance(s)
+                            if inst.switch_interval_counter >= inst.appliance_switch_interval:
+                                self.switch_on(inst)
+                                inst.switch_interval_counter = 0
+                                switched_off_appliance_to_switch_on_higher_prioritized_one = True
+                                log.info(f'{log_prefix} Average Excess power will be high enough by switching off lower prioritized appliance(s). Switched on appliance.'
+                                         f'({pwr_reducible=} W | {avg_excess_power=} W | {defined_power=} W)')
+                                # "restart" history by subtracting defined power from each history value within the specified time frame
+                                self._adjust_pwr_history(inst, -defined_power)
+                                task.sleep(1)
+                                if inst.dynamic_current_appliance:
+                                    _set_value(inst.appliance_current_set_entity, inst.min_current)
+                        else:
+                            log.debug(f'{log_prefix} Average Excess power not high enough to switch on appliance.')
                 # -------------------------------------------------------------------
 
 
@@ -636,7 +639,9 @@ class PvExcessControl:
                 continue
             if inst.actual_power is None:
                 pwr_reducible += inst.defined_current * PvExcessControl.grid_voltage * inst.phases
+                log.debug(f'pwr_reducible: {pwr_reducible=} W | {inst.defined_current=} A | {PvExcessControl.grid_voltage=} V | {inst.phases=} Phases')
             else:
                 pwr_reducible += _get_num_state(inst.actual_power)
+                log.debug(f'pwr_reducible: {pwr_reducible=} W | {inst.actual_power=} W')
         
         return pwr_reducible
