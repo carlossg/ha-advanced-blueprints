@@ -200,11 +200,10 @@ def pv_excess_control(automation_id, appliance_priority, export_power, pv_power,
                       max_current, appliance_switch, appliance_switch_interval, appliance_current_set_entity,
                       actual_power, defined_current, appliance_on_only, grid_voltage, import_export_power,
                       home_battery_capacity, solar_production_forecast, time_of_sunset, appliance_once_only, appliance_maximum_run_time,
-                      appliance_minimum_run_time, appliance_runtime_deadline, enabled):
+                      appliance_minimum_run_time, appliance_runtime_deadline, enabled, allowed_power_overage):
 
     automation_id = automation_id[11:] if automation_id[:11] == 'automation.' else automation_id
     automation_id = _replace_vowels(f"automation.{automation_id.strip().replace(' ', '_').lower()}")
-
 
     PvExcessControl(automation_id, appliance_priority, export_power, pv_power,
                     load_power, home_battery_level, min_home_battery_level, min_home_battery_level_start,
@@ -212,7 +211,7 @@ def pv_excess_control(automation_id, appliance_priority, export_power, pv_power,
                     max_current, appliance_switch, appliance_switch_interval,
                     appliance_current_set_entity, actual_power, defined_current, appliance_on_only,
                     grid_voltage, import_export_power, home_battery_capacity, solar_production_forecast, time_of_sunset,
-                    appliance_once_only, appliance_maximum_run_time, appliance_minimum_run_time, appliance_runtime_deadline, enabled)
+                    appliance_once_only, appliance_maximum_run_time, appliance_minimum_run_time, appliance_runtime_deadline, enabled, allowed_power_overage)
 
 
 
@@ -228,6 +227,7 @@ class PvExcessControl:
     home_battery_level = None
     grid_voltage = None
     import_export_power = None
+    allowed_power_overage = 0
     home_battery_capacity = None
     solar_production_forecast = None
     time_of_sunset = None
@@ -244,6 +244,7 @@ class PvExcessControl:
     #  WARNING: Do net set this to more than 0, otherwise some devices with dynamic current control will abruptly get switched off in some
     #  situations.
     min_excess_power = -10
+    # min_excess_power = -500
     on_time_counter = 0
 
 
@@ -252,7 +253,7 @@ class PvExcessControl:
                  max_current, appliance_switch, appliance_switch_interval, appliance_current_set_entity,
                  actual_power, defined_current, appliance_on_only, grid_voltage, import_export_power,
                  home_battery_capacity, solar_production_forecast, time_of_sunset, appliance_once_only, appliance_maximum_run_time,
-                 appliance_minimum_run_time, appliance_runtime_deadline, enabled):
+                 appliance_minimum_run_time, appliance_runtime_deadline, enabled, allowed_power_overage):
         if automation_id not in PvExcessControl.instances:
             inst = self
         else:
@@ -292,6 +293,7 @@ class PvExcessControl:
         inst.log_prefix = f'[{inst.appliance_switch} {inst.automation_id} (Prio {inst.appliance_priority})]'
         inst.domain = inst.appliance_switch.split('.')[0]
 
+        inst.allowed_power_overage = float(allowed_power_overage) / 100 # Percentage as decimal (e.g., 0.10 for 10%)
 
         # start if needed
         if inst.automation_id not in PvExcessControl.instances:
@@ -401,6 +403,15 @@ class PvExcessControl:
                     log.debug(f'{inst.log_prefix} Appliance has already run its maximum daily runtime, not turning on')
                     continue
 
+                # Adjust avg_excess_power by adding allowed overage
+                if inst.allowed_power_overage > 0:
+                    # Calculate additional allowed power based on current PV production
+                    pv_power = _get_num_state(PvExcessControl.pv_power, return_on_error=0)
+                    additional_power = pv_power * inst.allowed_power_overage
+                    avg_excess_power += additional_power
+                    log.debug(f'{inst.log_prefix} Allowing {inst.allowed_power_overage*100}% power overage. '
+                                f'Added {additional_power:.1f}W to available power {pv_power:.1f}W.')
+
                 # -------------------------------------------------------------------
                 # Determine if appliance can be turned on or current can be increased
                 if _get_state(inst.appliance_switch) == 'on':
@@ -456,7 +467,23 @@ class PvExcessControl:
                             if inst.dynamic_current_appliance:
                                 _set_value(inst.appliance_current_set_entity, inst.min_current)
                     else:
-                        log.debug(f'{log_prefix} Average Excess power ({avg_excess_power} W) not high enough to switch on appliance.')
+                        pwr_reducible = self.calculate_pwr_reducible(inst.appliance_priority)
+                        if (not switched_off_appliance_to_switch_on_higher_prioritized_one) and (pwr_reducible + avg_excess_power) >= (defined_power if inst.appliance_priority <= 500 else 0):
+                            # excess power is sufficient by switching off lower prioritized appliance(s)
+                            if inst.switch_interval_counter >= inst.appliance_switch_interval:
+                                self.switch_on(inst)
+                                inst.switch_interval_counter = 0
+                                switched_off_appliance_to_switch_on_higher_prioritized_one = True
+                                log.info(f'{log_prefix} Average Excess power will be high enough by switching off lower prioritized appliance(s). Switched on appliance.'
+                                         f'({pwr_reducible=} W | {avg_excess_power=} W | {defined_power=} W)')
+                                # "restart" history by subtracting defined power from each history value within the specified time frame
+                                self._adjust_pwr_history(inst, -defined_power)
+                                task.sleep(1)
+                                if inst.dynamic_current_appliance:
+                                    _set_value(inst.appliance_current_set_entity, inst.min_current)
+                        else:
+                            log.debug(f'{log_prefix} Average Excess power not high enough to switch on appliance: '
+                                      f'{avg_excess_power} W < {defined_power} W. Doing nothing.')
                 # -------------------------------------------------------------------
 
 
@@ -465,7 +492,17 @@ class PvExcessControl:
             prev_consumption_sum = 0
             for dic in instances:
                 inst = dic['instance']
-                avg_excess_power = dic['avg_excess_power'] + prev_consumption_sum
+                # Adjust avg_excess_power by adding allowed overage
+                if inst.allowed_power_overage > 0:
+                    # Calculate additional allowed power based on current PV production
+                    pv_power = _get_num_state(PvExcessControl.pv_power, return_on_error=0)
+                    additional_power = pv_power * inst.allowed_power_overage
+                    avg_excess_power = dic['avg_excess_power'] + prev_consumption_sum + additional_power
+                    log.debug(f'{inst.log_prefix} Allowing {inst.allowed_power_overage*100}% power overage. '
+                             f'Added {additional_power:.1f}W to available power {pv_power:.1f}W.')
+                else:
+                    avg_excess_power = dic['avg_excess_power'] + prev_consumption_sum
+
                 log_prefix = f'[{inst.appliance_switch} (Prio {inst.appliance_priority})]'
 
                 # -------------------------------------------------------------------

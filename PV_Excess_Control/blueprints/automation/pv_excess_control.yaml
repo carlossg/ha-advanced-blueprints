@@ -156,6 +156,26 @@ blueprint:
           multiple: false
 
 
+    allowed_power_overage:
+      name: "Allowed power overage"
+      description: >
+        Value in percent by which the available power can be increased over the electricity production.
+
+        E.g. if you set this to 20%, the script will try to use 20% more power than the electricity production.
+
+        **[WARNING]**
+
+        - **This sensor must be the same for all your created automations based on this blueprint!**
+
+      default: 0
+      selector:
+        number:
+          min: -100
+          max: 100
+          step: 5
+          unit_of_measurement: "%"
+
+
     home_battery_level:
       name: "Home battery level"
       description: >
@@ -515,6 +535,7 @@ action:
       appliance_on_only: !input appliance_on_only
       grid_voltage: !input grid_voltage
       import_export_power: !input import_export_power
+      allowed_power_overage: !input allowed_power_overage
       home_battery_capacity: !input home_battery_capacity
       solar_production_forecast: !input solar_production_forecast
       time_of_sunset: !input time_of_sunset
