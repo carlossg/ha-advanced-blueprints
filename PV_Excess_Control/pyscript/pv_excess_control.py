@@ -343,7 +343,8 @@ class PvExcessControl:
 
                     log.info(f'{log_prefix} csv: {inst.appliance_switch}, {inst.appliance_priority}, {defined_power}, {avg_excess_power}')
                     if avg_excess_power >= defined_power or (inst.appliance_priority > 1000 and avg_excess_power > 0):
-                        log.debug(f'{log_prefix} Average Excess power is high enough to switch on appliance.')
+                        log.debug(f'{log_prefix} Average Excess power is high enough to switch on appliance '
+                                  f'({avg_excess_power} W >= {defined_power} W).')
                         if inst.switch_interval_counter >= inst.appliance_switch_interval:
                             self.switch_on(inst)
                             inst.switch_interval_counter = 0
