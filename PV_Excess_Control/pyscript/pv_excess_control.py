@@ -99,11 +99,11 @@ def _set_value(entity_id: str, value: Union[int, float, str]) -> bool:
         return True
 
 
-def _get_num_state(entity_id: str, return_on_error: Union[float, None] = None) -> Union[float, None]:
+def _get_num_state(entity_id: str, return_on_error: Union[float, None] = 0) -> Union[float, None]:
     return _validate_number(_get_state(entity_id), return_on_error)
 
 
-def _validate_number(num: Union[float, str], return_on_error: Union[float, None] = None) -> Union[float, None]:
+def _validate_number(num: Union[float, str], return_on_error: Union[float, None] = 0) -> Union[float, None]:
     """
     Validate, if the passed variable is a number between 0 and 1000000.
     :param num:             Number
