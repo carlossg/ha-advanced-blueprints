@@ -149,7 +149,7 @@ def pv_excess_control(automation_id, appliance_priority, export_power, pv_power,
                       min_home_battery_level, dynamic_current_appliance, appliance_phases, min_current,
                       max_current, appliance_switch, appliance_switch_interval, appliance_current_set_entity,
                       actual_power, defined_current, appliance_on_only, grid_voltage, import_export_power,
-                      home_battery_capacity, solar_production_forecast, appliance_once_only, allowed_power_overage=20):
+                      home_battery_capacity, solar_production_forecast, appliance_once_only, allowed_power_overage):
 
     automation_id = automation_id[11:] if automation_id[:11] == 'automation.' else automation_id
     automation_id = _replace_vowels(f"automation.{automation_id.strip().replace(' ', '_').lower()}")
@@ -176,6 +176,7 @@ class PvExcessControl:
     home_battery_level = None
     grid_voltage = None
     import_export_power = None
+    allowed_power_overage = 0
     home_battery_capacity = None
     solar_production_forecast = None
     min_home_battery_level = None
