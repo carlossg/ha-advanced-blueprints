@@ -110,7 +110,7 @@ def _validate_number(num: Union[float, str], return_on_error: Union[float, None]
     :param return_on_error: Value to return in case of error
     :return:                Number if valid, else None
     """
-    if num is None or num == 'unavailable':
+    if num is None or num == 'unavailable' or num == 'unknown':
         return return_on_error
 
     min_v = -1000000
